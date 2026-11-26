@@ -2,9 +2,15 @@ import { SearchBar } from "~/components/SearchBar";
 import { TrendingGrid } from "~/components/TrendingGrid";
 import { getTrendingMovies } from "~/lib/api";
 
-// Renders per-request rather than being statically generated at build time,
-// since this page depends on the .NET API being reachable — which it isn't
-// during `next build` in CI.
+/**
+ * Home page (server component).
+ *
+ * - Renders per-request (force-dynamic) because it depends on the live API
+ *   being reachable — not safe to statically generate at build time in CI
+ * - Fetches trending movies via GET /movies/trending
+ * - Renders the SearchBar (client component) for user-initiated search
+ * - Rendering strategy: server-rendered trending, client-rendered search
+ */
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
