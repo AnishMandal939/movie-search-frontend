@@ -22,6 +22,24 @@ export class ApiError extends Error {
   }
 }
 
+interface CacheEntry<T> {
+  data: T;
+  expiry: number;
+}
+
+const searchCache = new Map<string, CacheEntry<SearchResponse>>();
+const CACHE_TTL_MS = 60_000; // 1 minute
+
+function getCached<T>(key: string): T | null {
+  const entry = searchCache.get(key);
+  if (!entry || Date.now() > entry.expiry) return null;
+  return entry.data as T;
+}
+
+function setCached<T extends SearchResponse>(key: string, data: T): void {
+  searchCache.set(key, { data, expiry: Date.now() + CACHE_TTL_MS });
+}
+
 /**
  * Low-level fetch wrapper used by all API functions.
  * - Resolves the base URL from NEXT_PUBLIC_API_BASE_URL
@@ -68,10 +86,19 @@ export function searchMovies(
   page: number,
   signal?: AbortSignal,
 ): Promise<SearchResponse> {
+  const cacheKey = `search:movie:${query.toLowerCase().trim()}:${page}`;
+  const cached = getCached<SearchResponse>(cacheKey);
+  if (cached) {
+    return Promise.resolve(cached);
+  }
+
   return apiFetch<SearchResponse>(
     `/movies/search?query=${encodeURIComponent(query)}&page=${page}`,
     { cache: "no-store", signal },
-  );
+  ).then((data) => {
+    setCached(cacheKey, data);
+    return data;
+  });
 }
 
 /**
@@ -96,5 +123,31 @@ export function getMovieVideos(
   return apiFetch<Video[]>(`/movies/${id}/videos`, {
     cache: "no-store",
     signal,
+  });
+}
+
+/**
+ * Search TV series by query and page (GET /tv/search).
+ * @param query - Search term (must not be empty)
+ * @param page - Page number, defaults to 1
+ * @param signal - Optional AbortSignal to cancel the request
+ */
+export function searchTvSeries(
+  query: string,
+  page: number,
+  signal?: AbortSignal,
+): Promise<SearchResponse> {
+  const cacheKey = `search:tv:${query.toLowerCase().trim()}:${page}`;
+  const cached = getCached<SearchResponse>(cacheKey);
+  if (cached) {
+    return Promise.resolve(cached);
+  }
+
+  return apiFetch<SearchResponse>(
+    `/tv/search?query=${encodeURIComponent(query)}&page=${page}`,
+    { cache: "no-store", signal },
+  ).then((data) => {
+    setCached(cacheKey, data);
+    return data;
   });
 }
